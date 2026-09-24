@@ -1,30 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { dijkstra } from '../../algorithms/dijkstra'
 import { isDoneStep } from '../../algorithms/types'
 import { describeRoadStep, routeLegs, routeLengthMeters } from '../describe'
 import { clearRoadDataCache, planRoute, RouteError } from '../planRoute'
-import { P, smallTown } from './fixtures'
-
-const POSTCODES: Record<string, [number, number] | null> = {
-  'AB1 1AA': [P[1][0] - 0.0001, P[1][1]], // just south of node 1
-  'AB1 1AB': [P[6][0] + 0.0001, P[6][1]], // just north of node 6
-  'AB1 9ZZ': [51.9, -0.1], // ~45 km away
-}
-
-/** A fake network: postcodes.io lookups by URL, Overpass by POST. */
-function fakeFetch(overpassBody: unknown = smallTown()) {
-  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input)
-    if (url.startsWith('https://api.postcodes.io/postcodes/')) {
-      const pc = decodeURIComponent(url.split('/').pop()!)
-      const coords = POSTCODES[pc]
-      if (!coords) return new Response(JSON.stringify({ status: 404 }), { status: 404 })
-      return new Response(JSON.stringify({ result: { postcode: pc, latitude: coords[0], longitude: coords[1] } }), { status: 200 })
-    }
-    if (init?.method === 'POST') return new Response(JSON.stringify(overpassBody), { status: 200 })
-    throw new Error(`unexpected fetch ${url}`)
-  })
-}
+import { fakeFetch } from './fixtures'
 
 beforeEach(() => clearRoadDataCache())
 
@@ -69,6 +48,22 @@ describe('planRoute', () => {
   it('reports an area with no drivable roads', async () => {
     const fetchImpl = fakeFetch({ elements: [] })
     await expect(planRoute('AB1 1AA', 'AB1 1AB', { fetchImpl, endpoints: ['https://x'] })).rejects.toThrow(/No drivable roads/)
+  })
+
+  it('tells the UI when it falls back to a backup road-data server', async () => {
+    const base = fakeFetch()
+    let posts = 0
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && posts++ === 0) return new Response('', { status: 406 })
+      return base(input, init)
+    }
+    const progress: [string, string | undefined][] = []
+    await planRoute('AB1 1AA', 'AB1 1AB', {
+      fetchImpl,
+      endpoints: ['https://blocked', 'https://ok'],
+      onProgress: (stage, detail) => progress.push([stage, detail]),
+    })
+    expect(progress).toContainEqual(['downloading', expect.stringMatching(/trying backup 1 of 1/)])
   })
 
   it('reuses downloaded road data for a repeat search of the same pair', async () => {

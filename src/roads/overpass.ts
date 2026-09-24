@@ -79,48 +79,174 @@ export function buildOverpassQuery(plan: QueryPlan): string {
   return `[out:json][timeout:90];\n(\n  ${lines.join('\n  ')}\n);\nout geom;`
 }
 
-export const OVERPASS_ENDPOINTS = [
+/**
+ * Public Overpass instances, tried in order. They are volunteer-run and
+ * individually unreliable (rate limits, maintenance, networks they refuse), so
+ * the client falls through them rather than depending on any one. Set
+ * VITE_OVERPASS_URL to put your own or a preferred instance first.
+ */
+export const PUBLIC_OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ]
 
+export function defaultOverpassEndpoints(): string[] {
+  const custom = (import.meta.env?.VITE_OVERPASS_URL as string | undefined)?.trim()
+  return custom ? [custom, ...PUBLIC_OVERPASS_ENDPOINTS.filter((e) => e !== custom)] : PUBLIC_OVERPASS_ENDPOINTS
+}
+
+/**
+ * How long to wait for a server to start answering before moving to the next.
+ * Overpass sends nothing until the whole query has run, so this has to cover
+ * server-side execution: a dense 2 km central-London query measured ~7 s to
+ * first byte, and a 25-mile query can take several times that. Too short and a
+ * healthy-but-busy server gets abandoned for a worse one.
+ */
+export const DEFAULT_RESPONSE_TIMEOUT_MS = 30_000
+
+export function responseTimeoutFor(plan: QueryPlan): number {
+  return plan.straightLineMeters <= 6000 ? 30_000 : 60_000
+}
+
 export class OverpassError extends Error {}
 
-/** POSTs the query, falling through to the next public mirror on network errors, 429s, or 5xx. */
-export async function fetchOverpass(
-  query: string,
-  options: { fetchImpl?: FetchFn; signal?: AbortSignal; endpoints?: string[] } = {},
-): Promise<OverpassResponse> {
-  const fetchImpl = options.fetchImpl ?? fetch
-  const endpoints = options.endpoints ?? OVERPASS_ENDPOINTS
-  let lastProblem = 'no endpoints tried'
+export interface FetchOverpassOptions {
+  fetchImpl?: FetchFn
+  signal?: AbortSignal
+  endpoints?: string[]
+  responseTimeoutMs?: number
+  /** Wait before retrying a server that said it was busy (429/504), unless it sends Retry-After. */
+  busyRetryDelayMs?: number
+  /** Called before each server is tried (0-based), so the UI can show "trying backup server". */
+  onAttempt?: (attempt: number, total: number) => void
+}
 
-  for (const endpoint of endpoints) {
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+const abortError = () => new DOMException('Aborted', 'AbortError')
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError())
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(abortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+type Attempt =
+  | { kind: 'ok'; body: OverpassResponse }
+  | { kind: 'failed'; problem: string; busy: boolean; retryAfterMs?: number }
+
+async function attemptServer(endpoint: string, query: string, timeoutMs: number, options: FetchOverpassOptions): Promise<Attempt> {
+  const fetchImpl = options.fetchImpl ?? fetch
+  const host = hostOf(endpoint)
+  const controller = new AbortController()
+  const forwardAbort = () => controller.abort()
+  options.signal?.addEventListener('abort', forwardAbort)
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+
+  try {
     let response: Response
     try {
       response = await fetchImpl(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`,
-        signal: options.signal,
+        signal: controller.signal,
       })
     } catch (err) {
-      if ((err as Error).name === 'AbortError') throw err
-      lastProblem = 'network error'
-      continue
+      if (options.signal?.aborted) throw err
+      return { kind: 'failed', busy: false, problem: `${host}: ${timedOut ? `no response in ${Math.round(timeoutMs / 1000)}s` : 'unreachable'}` }
+    } finally {
+      // Headers arrived (or the attempt failed): a large area's body can
+      // legitimately take a while to stream, so the timeout stops here.
+      clearTimeout(timer)
     }
-    if (response.status === 429 || response.status >= 500) {
-      lastProblem = response.status === 429 ? 'rate-limited (too many requests)' : `server error ${response.status}`
-      continue
+
+    if (response.status === 400) {
+      throw new OverpassError('The road-data server rejected the query as invalid (HTTP 400).')
     }
     if (!response.ok) {
-      throw new OverpassError(`The road-data service rejected the request (${response.status}).`)
+      const busy = response.status === 429 || response.status === 504
+      const retryAfterSeconds = Number(response.headers.get('Retry-After'))
+      return {
+        kind: 'failed',
+        busy,
+        retryAfterMs: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : undefined,
+        problem: `${host}: ${response.status === 429 ? 'too many requests' : response.status === 504 ? 'busy (HTTP 504)' : `HTTP ${response.status}`}`,
+      }
     }
-    const body = (await response.json()) as OverpassResponse
+
+    let body: OverpassResponse
+    try {
+      body = (await response.json()) as OverpassResponse
+    } catch (err) {
+      if (options.signal?.aborted) throw err
+      return { kind: 'failed', busy: false, problem: `${host}: unreadable response` }
+    }
     if (!body || !Array.isArray(body.elements)) {
-      throw new OverpassError('The road-data service returned an unexpected response.')
+      return { kind: 'failed', busy: false, problem: `${host}: unexpected response` }
     }
-    return body
+    return { kind: 'ok', body }
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', forwardAbort)
   }
-  throw new OverpassError(`Couldn't download road data — the OpenStreetMap service was ${lastProblem}. Try again in a minute.`)
+}
+
+const MAX_RETRY_AFTER_MS = 15_000
+
+/**
+ * POSTs the query to each server in turn until one returns usable data.
+ *
+ * Only an HTTP 400 stops everything — the query itself is malformed and every
+ * server would reject it. A 429 or 504 means "busy, no free query slot for you
+ * right now" (the main server allows two concurrent queries per IP), which
+ * usually clears within seconds, so that same server gets one polite retry
+ * after a short wait (or its Retry-After) before moving on. Anything else —
+ * network/CORS failure, 403/406, a non-JSON error page, or no response within
+ * the timeout — moves straight to the next server. Without the timeout a hung
+ * server would leave the user on "Downloading…" indefinitely.
+ */
+export async function fetchOverpass(query: string, options: FetchOverpassOptions = {}): Promise<OverpassResponse> {
+  const endpoints = options.endpoints ?? defaultOverpassEndpoints()
+  const timeoutMs = options.responseTimeoutMs ?? DEFAULT_RESPONSE_TIMEOUT_MS
+  const busyDelayMs = options.busyRetryDelayMs ?? 5000
+  const problems: string[] = []
+
+  for (let attempt = 0; attempt < endpoints.length; attempt++) {
+    if (options.signal?.aborted) throw abortError()
+    options.onAttempt?.(attempt, endpoints.length)
+
+    let result = await attemptServer(endpoints[attempt], query, timeoutMs, options)
+    if (result.kind === 'failed' && result.busy) {
+      await sleep(Math.min(result.retryAfterMs ?? busyDelayMs, MAX_RETRY_AFTER_MS), options.signal)
+      result = await attemptServer(endpoints[attempt], query, timeoutMs, options)
+    }
+    if (result.kind === 'ok') return result.body
+    problems.push(result.problem)
+  }
+
+  throw new OverpassError(
+    `Couldn't download road data from any OpenStreetMap server (${problems.join('; ') || 'no servers configured'}). ` +
+      'The free public servers are sometimes busy or refuse certain networks — try again in a few minutes, or on a different connection.',
+  )
 }

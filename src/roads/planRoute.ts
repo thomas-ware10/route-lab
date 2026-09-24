@@ -1,5 +1,5 @@
 import { haversineMeters, midpoint } from './geo'
-import { buildOverpassQuery, fetchOverpass, planQuery, type OverpassResponse, type QueryPlan } from './overpass'
+import { buildOverpassQuery, fetchOverpass, planQuery, responseTimeoutFor, type OverpassResponse, type QueryPlan } from './overpass'
 import { geocodePostcode, normalizePostcode, type FetchFn, type GeocodedPostcode } from './postcodes'
 import { buildRoadGraph, largestComponent, nearestNode, type RoadGraph } from './roadGraph'
 
@@ -25,7 +25,10 @@ export interface PlanRouteOptions {
   fetchImpl?: FetchFn
   signal?: AbortSignal
   endpoints?: string[]
-  onProgress?: (stage: RouteProgress) => void
+  /** `detail` is set while falling back to a backup road-data server. */
+  onProgress?: (stage: RouteProgress, detail?: string) => void
+  responseTimeoutMs?: number
+  busyRetryDelayMs?: number
 }
 
 const RESPONSE_CACHE_LIMIT = 4
@@ -35,10 +38,16 @@ export function clearRoadDataCache(): void {
   responseCache.clear()
 }
 
-async function downloadRoads(query: string, options: PlanRouteOptions): Promise<OverpassResponse> {
+async function downloadRoads(query: string, plan: QueryPlan, options: PlanRouteOptions): Promise<OverpassResponse> {
   const cached = responseCache.get(query)
   if (cached) return cached
-  const response = await fetchOverpass(query, options)
+  const response = await fetchOverpass(query, {
+    ...options,
+    responseTimeoutMs: options.responseTimeoutMs ?? responseTimeoutFor(plan),
+    onAttempt: (attempt, total) => {
+      if (attempt > 0) options.onProgress?.('downloading', `main server unavailable \u2014 trying backup ${attempt} of ${total - 1}`)
+    },
+  })
   responseCache.set(query, response)
   if (responseCache.size > RESPONSE_CACHE_LIMIT) {
     responseCache.delete(responseCache.keys().next().value!)
@@ -68,10 +77,12 @@ export async function planRoute(fromRaw: string, toRaw: string, options: PlanRou
 
   options.onProgress?.('downloading')
   const t0 = performance.now()
-  const response = await downloadRoads(buildOverpassQuery(plan), options)
+  const response = await downloadRoads(buildOverpassQuery(plan), plan, options)
   const downloadMs = performance.now() - t0
 
   options.onProgress?.('building')
+  // Graph building is synchronous; yield once so the "Building…" status can paint first.
+  await new Promise((resolve) => setTimeout(resolve, 0))
   const road = buildRoadGraph(response, midpoint(from, to))
   if (road.graph.edges.length === 0) {
     throw new RouteError('No drivable roads were found around those postcodes.')

@@ -1,1 +1,24 @@
 @import "tailwindcss";
+
+/* Pulsing ring on the junction the real-roads search is currently exploring. */
+.road-active-marker {
+  animation: road-active-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes road-active-pulse {
+  0%,
+  100% {
+    stroke-opacity: 1;
+    stroke-width: 3px;
+  }
+  50% {
+    stroke-opacity: 0.35;
+    stroke-width: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .road-active-marker {
+    animation: none;
+  }
+}

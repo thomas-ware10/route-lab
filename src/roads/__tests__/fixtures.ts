@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import type { OverpassResponse, OverpassWay } from '../overpass'
 
 export const CENTER = { lat: 51.5, lng: -0.1 }
@@ -44,3 +45,25 @@ export function smallTown(): OverpassResponse {
     ],
   }
 }
+
+export const POSTCODES: Record<string, [number, number] | null> = {
+  'AB1 1AA': [P[1][0] - 0.0001, P[1][1]], // just south of node 1
+  'AB1 1AB': [P[6][0] + 0.0001, P[6][1]], // just north of node 6
+  'AB1 9ZZ': [51.9, -0.1], // ~45 km away
+}
+
+/** A fake network: postcodes.io lookups by URL, Overpass by POST. */
+export function fakeFetch(overpassBody: unknown = smallTown()) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.startsWith('https://api.postcodes.io/postcodes/')) {
+      const pc = decodeURIComponent(url.split('/').pop()!)
+      const coords = POSTCODES[pc]
+      if (!coords) return new Response(JSON.stringify({ status: 404 }), { status: 404 })
+      return new Response(JSON.stringify({ result: { postcode: pc, latitude: coords[0], longitude: coords[1] } }), { status: 200 })
+    }
+    if (init?.method === 'POST') return new Response(JSON.stringify(overpassBody), { status: 200 })
+    throw new Error(`unexpected fetch ${url}`)
+  })
+}
+
