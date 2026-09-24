@@ -141,7 +141,7 @@ export function astar(graph: Graph, options: ShortestPathOptions): Trace {
 
   const warnings = [
     ...findNegativeWeightWarning(graph),
-    ...findInadmissibleHeuristicWarning(graph, endNodeId, heuristic),
+    ...findInadmissibleHeuristicWarning(graph, heuristic),
   ]
 
   return { algorithm: 'astar', steps, warnings }

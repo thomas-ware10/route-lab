@@ -61,7 +61,6 @@ export function GraphCanvas() {
   const startNodeId = useGraphStore((s) => s.startNodeId)
   const endNodeId = useGraphStore((s) => s.endNodeId)
   const locked = useGraphStore((s) => s.locked)
-  const pickMode = useGraphStore((s) => s.pickMode)
   const addNode = useGraphStore((s) => s.addNode)
   const moveNode = useGraphStore((s) => s.moveNode)
   const removeNode = useGraphStore((s) => s.removeNode)
@@ -229,19 +228,28 @@ export function GraphCanvas() {
 
         return (
           <g key={edge.id}>
+            {/* Wide invisible hit-area so the thin visible line is still easy to click. */}
             <line
               x1={x1}
               y1={y1}
               x2={x2}
               y2={y2}
-              className={`${EDGE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''}`}
-              strokeWidth={EDGE_WIDTH[state]}
-              strokeDasharray={state === 'rejected' ? '4 4' : undefined}
-              markerEnd={graph.mode === 'directed' ? 'url(#arrowhead)' : undefined}
+              stroke="transparent"
+              strokeWidth={16}
               onClick={(e) => handleEdgeClick(e, edge.id, edge.weight)}
               onContextMenu={(e) => handleEdgeContextMenu(e, edge.id)}
               style={{ cursor: locked ? 'default' : 'pointer' }}
               data-testid={`edge-${edge.id}`}
+            />
+            <line
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              className={`${EDGE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''} pointer-events-none`}
+              strokeWidth={EDGE_WIDTH[state]}
+              strokeDasharray={state === 'rejected' ? '4 4' : undefined}
+              markerEnd={graph.mode === 'directed' ? 'url(#arrowhead)' : undefined}
             />
             {editingEdgeId === edge.id ? (
               <foreignObject x={midX - 28} y={midY - 12} width={56} height={24}>

@@ -12,7 +12,6 @@ export function euclideanDistance(a: GraphNode, b: GraphNode): number {
  */
 export function findInadmissibleHeuristicWarning(
   graph: Graph,
-  goalId: string,
   heuristic: (nodeId: string) => number,
 ): string[] {
   const warnings: string[] = []

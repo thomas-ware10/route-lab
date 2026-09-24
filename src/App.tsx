@@ -1,121 +1,65 @@
 import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { ComparisonPanel } from './components/ComparisonPanel'
+import { ControlPanel } from './components/ControlPanel'
+import { GraphCanvas } from './components/GraphCanvas'
+import { PlaybackControls } from './components/PlaybackControls'
+import { StatsPanel } from './components/StatsPanel'
+import { WarningBanner } from './components/WarningBanner'
+
+type Tab = 'editor' | 'compare'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [tab, setTab] = useState<Tab>('editor')
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-slate-100">
+      <header className="border-b border-slate-200 bg-white px-6 py-3">
+        <h1 className="text-lg font-semibold text-slate-900">Graph Theory & Network Optimization Visualizer</h1>
+        <p className="text-xs text-slate-500">
+          Click to add nodes, drag between them to connect. Right-click deletes. Click an edge to edit its weight.
+        </p>
+      </header>
 
-      <div className="ticks"></div>
+      <nav className="px-6 pt-3 flex gap-1">
+        {(
+          [
+            ['editor', 'Editor'],
+            ['compare', 'Sparse vs. Dense'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`text-sm px-3 py-1.5 rounded-t-lg border border-b-0 ${
+              tab === id ? 'bg-white border-slate-200 text-slate-900 font-medium' : 'bg-transparent border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <main className="p-6 pt-3 bg-white border-t border-slate-200">
+        {tab === 'editor' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+            <div className="space-y-3">
+              <GraphCanvas />
+              <div className="p-3 bg-white rounded-lg border border-slate-200">
+                <PlaybackControls />
+              </div>
+            </div>
+            <div className="space-y-4">
+              <ControlPanel />
+              <WarningBanner />
+              <StatsPanel />
+            </div>
+          </div>
+        ) : (
+          <ComparisonPanel />
+        )}
+      </main>
+    </div>
   )
 }
 
