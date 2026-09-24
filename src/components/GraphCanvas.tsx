@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { NodeVisualState, EdgeVisualState } from '../playback/deriveVisualState'
 import { deriveVisualState } from '../playback/deriveVisualState'
 import { useGraphStore } from '../store/graphStore'
@@ -77,6 +78,7 @@ export function GraphCanvas() {
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const backgroundDownRef = useRef<{ x: number; y: number } | null>(null)
+  const dragStateRef = useRef<DragState | null>(null)
 
   const nodeById = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph.nodes])
 
@@ -116,35 +118,47 @@ export function GraphCanvas() {
     e.stopPropagation()
     if (locked) return
     const node = nodeById.get(nodeId)!
-    setDrag({ nodeId, startClientX: e.clientX, startClientY: e.clientY, moved: false, currentX: node.x, currentY: node.y })
+    // dragStateRef is the source of truth read by handleMove/handleUp; setDrag only
+    // drives rendering. Store mutations must never happen inside a setState updater
+    // (React may invoke updaters outside the normal commit flow), so every side
+    // effect below is a plain statement in a native event handler instead.
+    const initial: DragState = { nodeId, startClientX: e.clientX, startClientY: e.clientY, moved: false, currentX: node.x, currentY: node.y }
+    dragStateRef.current = initial
+    setDrag(initial)
 
     const handleMove = (moveEvent: MouseEvent) => {
+      const prev = dragStateRef.current
+      if (!prev) return
       const pt = getSvgPoint(moveEvent.clientX, moveEvent.clientY)
-      setDrag((prev) => {
-        if (!prev) return prev
-        const dist = Math.hypot(moveEvent.clientX - prev.startClientX, moveEvent.clientY - prev.startClientY)
-        return { ...prev, moved: prev.moved || dist > DRAG_THRESHOLD, currentX: pt.x, currentY: pt.y }
-      })
+      const dist = Math.hypot(moveEvent.clientX - prev.startClientX, moveEvent.clientY - prev.startClientY)
+      const next: DragState = { ...prev, moved: prev.moved || dist > DRAG_THRESHOLD, currentX: pt.x, currentY: pt.y }
+      dragStateRef.current = next
+      setDrag(next)
     }
 
     const handleUp = (upEvent: MouseEvent) => {
       window.removeEventListener('mousemove', handleMove)
       window.removeEventListener('mouseup', handleUp)
-      setDrag((prev) => {
-        if (!prev) return null
-        if (!prev.moved) {
-          pickNode(prev.nodeId)
-          return null
-        }
-        const pt = getSvgPoint(upEvent.clientX, upEvent.clientY)
-        const targetId = findNodeAt(pt.x, pt.y, prev.nodeId)
-        if (targetId) {
-          addEdge(prev.nodeId, targetId, 1)
-        } else {
-          moveNode(prev.nodeId, clamp(pt.x, NODE_RADIUS, CANVAS_WIDTH - NODE_RADIUS), clamp(pt.y, NODE_RADIUS, CANVAS_HEIGHT - NODE_RADIUS))
-        }
-        return null
-      })
+      const prev = dragStateRef.current
+      dragStateRef.current = null
+      // Flush this local update synchronously before the Zustand mutations below:
+      // otherwise the store's external-store notification and this component's own
+      // pending re-render can interleave, which React reports as "update while
+      // rendering a different component".
+      flushSync(() => setDrag(null))
+      if (!prev) return
+
+      if (!prev.moved) {
+        pickNode(prev.nodeId)
+        return
+      }
+      const pt = getSvgPoint(upEvent.clientX, upEvent.clientY)
+      const targetId = findNodeAt(pt.x, pt.y, prev.nodeId)
+      if (targetId) {
+        addEdge(prev.nodeId, targetId, 1)
+      } else {
+        moveNode(prev.nodeId, clamp(pt.x, NODE_RADIUS, CANVAS_WIDTH - NODE_RADIUS), clamp(pt.y, NODE_RADIUS, CANVAS_HEIGHT - NODE_RADIUS))
+      }
     }
 
     window.addEventListener('mousemove', handleMove)
