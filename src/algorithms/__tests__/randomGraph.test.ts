@@ -74,6 +74,25 @@ describe('generateRandomGraph', () => {
     expect(generateRandomGraph({ nodeCount: 1, density: 0.5 }).edges.length).toBe(0)
   })
 
+  it('keeps enough space between node centers to avoid overlap, even at 30 nodes', () => {
+    const g = generateRandomGraph({ nodeCount: 30, density: 0.5, seed: 11, width: 900, height: 540 })
+    const NODE_DIAMETER = 40 // matches NODE_RADIUS = 20 in graphVisualStyles.ts
+    for (let i = 0; i < g.nodes.length; i++) {
+      for (let j = i + 1; j < g.nodes.length; j++) {
+        const dist = Math.hypot(g.nodes[i].x - g.nodes[j].x, g.nodes[i].y - g.nodes[j].y)
+        expect(dist).toBeGreaterThan(NODE_DIAMETER)
+      }
+    }
+  })
+
+  it('places nodes on a circle centered in the canvas', () => {
+    const g = generateRandomGraph({ nodeCount: 6, density: 0.3, seed: 4, width: 900, height: 540 })
+    const centerX = 450
+    const centerY = 270
+    const radii = g.nodes.map((n) => Math.hypot(n.x - centerX, n.y - centerY))
+    for (const r of radii) expect(r).toBeCloseTo(radii[0], 0)
+  })
+
   it('respects the weight range', () => {
     const g = generateRandomGraph({ nodeCount: 20, density: 0.6, seed: 3, minWeight: 5, maxWeight: 9 })
     for (const e of g.edges) {

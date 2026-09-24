@@ -54,12 +54,23 @@ export function generateRandomGraph(options: RandomGraphOptions): Graph {
   const rand = seededRandom(seed)
   const randomWeight = () => Math.round(minWeight + rand() * (maxWeight - minWeight))
 
-  const nodes: GraphNode[] = Array.from({ length: nodeCount }, (_, i) => ({
-    id: `n${i}`,
-    label: `${i}`,
-    x: Math.round(40 + rand() * Math.max(1, width - 80)),
-    y: Math.round(40 + rand() * Math.max(1, height - 80)),
-  }))
+  // Nodes are placed evenly around a circle rather than scattered randomly: with
+  // random placement, higher node counts (up to 30) would frequently overlap or
+  // cross each other in confusing ways. A circle guarantees consistent minimum
+  // spacing between every pair of nodes for any count in the supported range.
+  const centerX = width / 2
+  const centerY = height / 2
+  const padding = 50
+  const layoutRadius = Math.max(10, Math.min(width, height) / 2 - padding)
+  const nodes: GraphNode[] = Array.from({ length: nodeCount }, (_, i) => {
+    const angle = nodeCount > 1 ? (2 * Math.PI * i) / nodeCount - Math.PI / 2 : 0
+    return {
+      id: `n${i}`,
+      label: `${i}`,
+      x: Math.round(centerX + layoutRadius * Math.cos(angle)),
+      y: Math.round(centerY + layoutRadius * Math.sin(angle)),
+    }
+  })
 
   if (nodeCount <= 1) {
     return { mode, nodes, edges: [] }

@@ -26,6 +26,8 @@ export function ControlPanel() {
   const [error, setError] = useState<string | null>(null)
   const [randomNodeCount, setRandomNodeCount] = useState(10)
   const [randomDensity, setRandomDensity] = useState(0.3)
+  const [randomMinWeight, setRandomMinWeight] = useState(1)
+  const [randomMaxWeight, setRandomMaxWeight] = useState(20)
 
   const nodeLabel = (id: string | null) => (id ? (graph.nodes.find((n) => n.id === id)?.label ?? id) : 'not set')
 
@@ -46,12 +48,17 @@ export function ControlPanel() {
   }
 
   function handleGenerateRandom() {
+    const nodeCount = Math.min(30, Math.max(3, randomNodeCount))
+    const minWeight = Math.min(randomMinWeight, randomMaxWeight)
+    const maxWeight = Math.max(randomMinWeight, randomMaxWeight)
     const g = generateRandomGraph({
-      nodeCount: randomNodeCount,
+      nodeCount,
       density: randomDensity,
       mode: graph.mode,
       width: 900,
       height: 540,
+      minWeight,
+      maxWeight,
     })
     loadGraph(g)
     clearTrace()
@@ -167,8 +174,8 @@ export function ControlPanel() {
           <input
             id="node-count"
             type="number"
-            min={2}
-            max={60}
+            min={3}
+            max={30}
             value={randomNodeCount}
             disabled={locked}
             onChange={(e) => setRandomNodeCount(Number(e.target.value))}
@@ -187,6 +194,28 @@ export function ControlPanel() {
             className="flex-1"
           />
           <span className="w-10 text-right">{randomDensity.toFixed(2)}</span>
+        </div>
+        <div className="flex items-center gap-2 mb-2 text-xs">
+          <label htmlFor="min-weight">Weight range</label>
+          <input
+            id="min-weight"
+            type="number"
+            aria-label="Minimum weight"
+            value={randomMinWeight}
+            disabled={locked}
+            onChange={(e) => setRandomMinWeight(Number(e.target.value))}
+            className="w-14 border border-slate-300 rounded px-1 py-0.5"
+          />
+          <span>to</span>
+          <input
+            id="max-weight"
+            type="number"
+            aria-label="Maximum weight"
+            value={randomMaxWeight}
+            disabled={locked}
+            onChange={(e) => setRandomMaxWeight(Number(e.target.value))}
+            className="w-14 border border-slate-300 rounded px-1 py-0.5"
+          />
         </div>
         <button
           type="button"

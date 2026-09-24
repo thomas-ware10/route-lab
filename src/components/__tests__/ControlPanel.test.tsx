@@ -85,6 +85,24 @@ describe('ControlPanel', () => {
     expect(useGraphStore.getState().graph.nodes).toHaveLength(8)
   })
 
+  it('clamps generated node count to the 3-30 range', () => {
+    render(<ControlPanel />)
+    fireEvent.change(screen.getByLabelText('Nodes'), { target: { value: '999' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate random graph' }))
+    expect(useGraphStore.getState().graph.nodes).toHaveLength(30)
+  })
+
+  it('applies a custom weight range to generated edges', () => {
+    render(<ControlPanel />)
+    fireEvent.change(screen.getByLabelText('Nodes'), { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('Minimum weight'), { target: { value: '5' } })
+    fireEvent.change(screen.getByLabelText('Maximum weight'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Generate random graph' }))
+    const edges = useGraphStore.getState().graph.edges
+    expect(edges.length).toBeGreaterThan(0)
+    expect(edges.every((e) => e.weight === 5)).toBe(true)
+  })
+
   it('disables all controls while locked', () => {
     useGraphStore.setState({ locked: true })
     render(<ControlPanel />)

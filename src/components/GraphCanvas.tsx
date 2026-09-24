@@ -1,47 +1,30 @@
 import { useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import type { NodeVisualState, EdgeVisualState } from '../playback/deriveVisualState'
 import { deriveVisualState } from '../playback/deriveVisualState'
 import { useGraphStore } from '../store/graphStore'
 import { usePlaybackStore } from '../store/playbackStore'
+import {
+  ACTIVE_RING_OFFSET,
+  ACTIVE_RING_STROKE,
+  ACTIVE_RING_WIDTH,
+  EDGE_DASH,
+  EDGE_GLOW,
+  EDGE_OPACITY,
+  EDGE_STROKE,
+  EDGE_WIDTH,
+  END_RING_STROKE,
+  NODE_FILL,
+  NODE_GLOW,
+  NODE_RADIUS,
+  NODE_STROKE,
+  NODE_STROKE_WIDTH,
+  NODE_TEXT,
+  START_RING_STROKE,
+} from './graphVisualStyles'
 
 export const CANVAS_WIDTH = 900
 export const CANVAS_HEIGHT = 540
-const NODE_RADIUS = 20
 const DRAG_THRESHOLD = 4
-
-const NODE_FILL: Record<NodeVisualState, string> = {
-  unvisited: 'fill-white',
-  visited: 'fill-sky-200',
-  finalized: 'fill-sky-500',
-  path: 'fill-emerald-500',
-}
-const NODE_STROKE: Record<NodeVisualState, string> = {
-  unvisited: 'stroke-slate-400',
-  visited: 'stroke-sky-500',
-  finalized: 'stroke-sky-700',
-  path: 'stroke-emerald-700',
-}
-const NODE_TEXT: Record<NodeVisualState, string> = {
-  unvisited: 'fill-slate-700',
-  visited: 'fill-slate-900',
-  finalized: 'fill-white',
-  path: 'fill-white',
-}
-const EDGE_STROKE: Record<EdgeVisualState, string> = {
-  default: 'stroke-slate-300',
-  considering: 'stroke-amber-500',
-  rejected: 'stroke-rose-300',
-  accepted: 'stroke-sky-500',
-  path: 'stroke-emerald-500',
-}
-const EDGE_WIDTH: Record<EdgeVisualState, number> = {
-  default: 2,
-  considering: 3,
-  rejected: 2,
-  accepted: 3,
-  path: 4,
-}
 
 interface DragState {
   nodeId: string
@@ -261,8 +244,11 @@ export function GraphCanvas() {
               x2={x2}
               y2={y2}
               className={`${EDGE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''} pointer-events-none`}
-              strokeWidth={EDGE_WIDTH[state]}
-              strokeDasharray={state === 'rejected' ? '4 4' : undefined}
+              strokeWidth={isCurrent ? EDGE_WIDTH[state] + 1 : EDGE_WIDTH[state]}
+              strokeDasharray={EDGE_DASH[state]}
+              strokeOpacity={EDGE_OPACITY[state]}
+              strokeLinecap="round"
+              style={{ filter: EDGE_GLOW[state] }}
               markerEnd={graph.mode === 'directed' ? 'url(#arrowhead)' : undefined}
             />
             {editingEdgeId === edge.id ? (
@@ -326,19 +312,33 @@ export function GraphCanvas() {
                 cy={cy}
                 r={NODE_RADIUS + 5}
                 fill="none"
-                className={isStart ? 'stroke-green-500' : 'stroke-purple-500'}
+                className={isStart ? START_RING_STROKE : END_RING_STROKE}
                 strokeWidth={3}
+              />
+            )}
+            {/* "Currently active" is a distinct ring shape, not just a color, so it
+                reads clearly regardless of the node's underlying fill state or the
+                viewer's color perception. */}
+            {isCurrent && (
+              <circle
+                cx={cx}
+                cy={cy}
+                r={NODE_RADIUS + ACTIVE_RING_OFFSET}
+                fill="none"
+                className={`${ACTIVE_RING_STROKE} animate-pulse`}
+                strokeWidth={ACTIVE_RING_WIDTH}
+                strokeDasharray="3 3"
               />
             )}
             <circle
               cx={cx}
               cy={cy}
               r={NODE_RADIUS}
-              className={`${NODE_FILL[state]} ${NODE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''}`}
-              strokeWidth={3}
+              className={`${NODE_FILL[state]} ${NODE_STROKE[state]}`}
+              strokeWidth={NODE_STROKE_WIDTH[state]}
               onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
               onContextMenu={(e) => handleNodeContextMenu(e, node.id)}
-              style={{ cursor: locked ? 'default' : 'grab' }}
+              style={{ cursor: locked ? 'default' : 'grab', filter: NODE_GLOW[state] }}
               data-testid={`node-${node.id}`}
             />
             <text
