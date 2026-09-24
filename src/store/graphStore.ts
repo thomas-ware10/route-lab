@@ -11,12 +11,16 @@ function nextId(prefix: string): string {
   return `${prefix}${idCounter}`
 }
 
+export type PickMode = 'none' | 'start' | 'end'
+
 interface GraphState {
   graph: Graph
   startNodeId: string | null
   endNodeId: string | null
   /** True while a trace is playing back; the editor UI should disable mutation. */
   locked: boolean
+  /** When not 'none', the next node click sets that endpoint instead of doing nothing. */
+  pickMode: PickMode
 
   addNode: (x: number, y: number) => string
   moveNode: (id: string, x: number, y: number) => void
@@ -29,6 +33,9 @@ interface GraphState {
   setStartNode: (id: string | null) => void
   setEndNode: (id: string | null) => void
   setLocked: (locked: boolean) => void
+  setPickMode: (mode: PickMode) => void
+  /** Resolves the current pick mode against a clicked node, if any. */
+  pickNode: (nodeId: string) => void
   loadGraph: (graph: Graph) => void
   clearGraph: () => void
 }
@@ -46,6 +53,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   startNodeId: null,
   endNodeId: null,
   locked: false,
+  pickMode: 'none',
 
   addNode: (x, y) => {
     const id = nextId('n')
@@ -107,6 +115,13 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   setStartNode: (id) => set({ startNodeId: id }),
   setEndNode: (id) => set({ endNodeId: id }),
   setLocked: (locked) => set({ locked }),
+  setPickMode: (pickMode) => set({ pickMode }),
+
+  pickNode: (nodeId) => {
+    const { pickMode } = get()
+    if (pickMode === 'start') set({ startNodeId: nodeId, pickMode: 'none' })
+    else if (pickMode === 'end') set({ endNodeId: nodeId, pickMode: 'none' })
+  },
 
   loadGraph: (graph) => set({ graph, startNodeId: null, endNodeId: null }),
 
@@ -115,5 +130,6 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       graph: createEmptyGraph(state.graph.mode),
       startNodeId: null,
       endNodeId: null,
+      pickMode: 'none',
     })),
 }))

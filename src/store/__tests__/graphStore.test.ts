@@ -4,7 +4,13 @@ import { resetGraphIdCounter, useGraphStore } from '../graphStore'
 
 beforeEach(() => {
   resetGraphIdCounter()
-  useGraphStore.setState({ graph: createEmptyGraph(), startNodeId: null, endNodeId: null, locked: false })
+  useGraphStore.setState({
+    graph: createEmptyGraph(),
+    startNodeId: null,
+    endNodeId: null,
+    locked: false,
+    pickMode: 'none',
+  })
 })
 
 describe('graphStore', () => {
@@ -80,6 +86,28 @@ describe('graphStore', () => {
     const state = useGraphStore.getState()
     expect(state.graph.edges).toHaveLength(0)
     expect(state.graph.nodes).toHaveLength(2)
+  })
+
+  it('pickNode sets the start node when in start-picking mode, then resets the mode', () => {
+    const a = useGraphStore.getState().addNode(0, 0)
+    useGraphStore.getState().setPickMode('start')
+    useGraphStore.getState().pickNode(a)
+    expect(useGraphStore.getState().startNodeId).toBe(a)
+    expect(useGraphStore.getState().pickMode).toBe('none')
+  })
+
+  it('pickNode sets the end node when in end-picking mode', () => {
+    const a = useGraphStore.getState().addNode(0, 0)
+    useGraphStore.getState().setPickMode('end')
+    useGraphStore.getState().pickNode(a)
+    expect(useGraphStore.getState().endNodeId).toBe(a)
+  })
+
+  it('pickNode does nothing when not in a picking mode', () => {
+    const a = useGraphStore.getState().addNode(0, 0)
+    useGraphStore.getState().pickNode(a)
+    expect(useGraphStore.getState().startNodeId).toBeNull()
+    expect(useGraphStore.getState().endNodeId).toBeNull()
   })
 
   it('clearGraph empties nodes/edges but keeps the current mode', () => {
