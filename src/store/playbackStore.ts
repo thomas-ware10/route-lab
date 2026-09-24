@@ -40,7 +40,8 @@ export const usePlaybackStore = create<PlaybackState>((set, get) => ({
   pause: () => set({ isPlaying: false }),
 
   togglePlay: () => {
-    get().isPlaying ? get().pause() : get().play()
+    if (get().isPlaying) get().pause()
+    else get().play()
   },
 
   stepForward: () => {
