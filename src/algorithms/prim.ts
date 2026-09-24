@@ -1,4 +1,4 @@
-import { outgoingEdges, otherEnd, type Graph } from '../types'
+import { buildAdjacency, otherEnd, type Graph } from '../types'
 import type { Step, Trace } from './types'
 import { PriorityQueue } from './priorityQueue'
 import { StatsTracker } from './statsTracker'
@@ -51,6 +51,7 @@ export function prim(graph: Graph, options: PrimOptions = {}): Trace {
   const steps: Step[] = []
   const stats = new StatsTracker()
   const edgeById = new Map(graph.edges.map((e) => [e.id, e]))
+  const adjacency = buildAdjacency(graph)
   const pq = new PriorityQueue<FrontierItem>()
   const visited = new Set<string>()
 
@@ -72,7 +73,7 @@ export function prim(graph: Graph, options: PrimOptions = {}): Trace {
       description: `Added ${nodeId} to the tree`,
       stats: stats.snapshot(),
     })
-    for (const edge of outgoingEdges(graph, nodeId)) {
+    for (const edge of adjacency.get(nodeId) ?? []) {
       const neighbor = otherEnd(edge, nodeId)
       if (visited.has(neighbor)) continue
       pq.push({ edgeId: edge.id, fromNodeId: nodeId }, edge.weight)

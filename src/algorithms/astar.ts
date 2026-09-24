@@ -1,4 +1,4 @@
-import { outgoingEdges, otherEnd, type Graph } from '../types'
+import { buildAdjacency, otherEnd, type Graph } from '../types'
 import type { Step, Trace } from './types'
 import { PriorityQueue } from './priorityQueue'
 import { StatsTracker } from './statsTracker'
@@ -26,6 +26,7 @@ export function astar(graph: Graph, options: ShortestPathOptions): Trace {
   const steps: Step[] = []
   const stats = new StatsTracker()
   const pq = new PriorityQueue<string>()
+  const adjacency = buildAdjacency(graph)
 
   const gScore = new Map<string, number>()
   const prevEdge = new Map<string, string>()
@@ -64,7 +65,7 @@ export function astar(graph: Graph, options: ShortestPathOptions): Trace {
       stats: stats.snapshot(),
     })
 
-    for (const edge of outgoingEdges(graph, nodeId)) {
+    for (const edge of adjacency.get(nodeId) ?? []) {
       const neighbor = otherEnd(edge, nodeId)
       if (finalized.has(neighbor)) continue
 
