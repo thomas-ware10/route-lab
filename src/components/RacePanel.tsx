@@ -291,7 +291,7 @@ export function RacePanel() {
                   </span>
                 )}
               </div>
-              <GraphView graph={graph} visualState={visualStateA} startNodeId={startNodeId} endNodeId={endNodeId} />
+              <GraphView graph={graph} visualState={visualStateA} startNodeId={startNodeId} endNodeId={endNodeId} ariaLabel="Algorithm race graph view" />
               <p className="text-xs text-slate-600 min-h-[1.5em]">
                 {clampedIndexA >= 0 ? traceA.steps[clampedIndexA].description : 'Not started.'}
               </p>
@@ -305,7 +305,7 @@ export function RacePanel() {
                   </span>
                 )}
               </div>
-              <GraphView graph={graph} visualState={visualStateB} startNodeId={startNodeId} endNodeId={endNodeId} />
+              <GraphView graph={graph} visualState={visualStateB} startNodeId={startNodeId} endNodeId={endNodeId} ariaLabel="Algorithm race graph view" />
               <p className="text-xs text-slate-600 min-h-[1.5em]">
                 {clampedIndexB >= 0 ? traceB.steps[clampedIndexB].description : 'Not started.'}
               </p>

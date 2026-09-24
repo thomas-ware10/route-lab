@@ -24,23 +24,40 @@ export interface GraphViewProps {
   visualState: VisualState
   startNodeId?: string | null
   endNodeId?: string | null
+  ariaLabel?: string
+  onNodeClick?: (nodeId: string) => void
+  onEdgeClick?: (edgeId: string) => void
+  /** Marks a node/edge the viewer guessed incorrectly, distinct from the
+   *  amber "active" ring (which, once revealed, already marks the correct
+   *  answer via the trace's own current step). */
+  wrongGuessNodeId?: string | null
+  wrongGuessEdgeId?: string | null
 }
 
 /**
  * Read-only graph renderer: same state -> color/shape mapping as the
  * interactive GraphCanvas (via the shared graphVisualStyles module), but with
- * no editing handlers. Used by race mode to show two synchronized traces
- * side by side without duplicating the editor's drag/click logic. Node
- * coordinates come from the graph itself (laid out in the 900x540 editor
- * space), so the viewBox matches that space and scales down via CSS.
+ * no drag/edit handlers. Used by race mode (no interaction) and quiz mode
+ * (optional click-to-guess via onNodeClick/onEdgeClick) so both reuse one
+ * rendering path instead of duplicating GraphCanvas's SVG layout logic.
  */
-export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphViewProps) {
+export function GraphView({
+  graph,
+  visualState,
+  startNodeId,
+  endNodeId,
+  ariaLabel = 'Graph view',
+  onNodeClick,
+  onEdgeClick,
+  wrongGuessNodeId,
+  wrongGuessEdgeId,
+}: GraphViewProps) {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
   const viewBoxWidth = 900
   const viewBoxHeight = 540
 
   return (
-    <svg viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} className="w-full h-auto rounded-lg border border-slate-200 bg-slate-50" role="img" aria-label="Algorithm race graph view">
+    <svg viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`} className="w-full h-auto rounded-lg border border-slate-200 bg-slate-50" role="img" aria-label={ariaLabel}>
       <defs>
         <marker id="race-arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
           <path d="M0,0 L8,4 L0,8 Z" className="fill-slate-400" />
@@ -65,15 +82,29 @@ export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphV
         const midY = (y1 + y2) / 2
         const state = visualState.edges[edge.id] ?? 'default'
         const isCurrent = visualState.currentEdgeId === edge.id
+        const isWrongGuess = wrongGuessEdgeId === edge.id
 
         return (
           <g key={edge.id}>
+            {onEdgeClick && (
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke="transparent"
+                strokeWidth={16}
+                onClick={() => onEdgeClick(edge.id)}
+                style={{ cursor: 'pointer' }}
+                data-testid={`quiz-edge-hit-${edge.id}`}
+              />
+            )}
             <line
               x1={x1}
               y1={y1}
               x2={x2}
               y2={y2}
-              className={`${EDGE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''}`}
+              className={`${EDGE_STROKE[state]} ${isCurrent ? 'animate-pulse' : ''} pointer-events-none`}
               strokeWidth={isCurrent ? EDGE_WIDTH[state] + 1 : EDGE_WIDTH[state]}
               strokeDasharray={EDGE_DASH[state]}
               strokeOpacity={EDGE_OPACITY[state]}
@@ -81,12 +112,24 @@ export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphV
               style={{ filter: EDGE_GLOW[state] }}
               markerEnd={graph.mode === 'directed' ? 'url(#race-arrowhead)' : undefined}
             />
+            {isWrongGuess && (
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                className="stroke-rose-500 pointer-events-none"
+                strokeWidth={EDGE_WIDTH[state] + 3}
+                strokeOpacity={0.5}
+                strokeLinecap="round"
+              />
+            )}
             <text
               x={midX}
               y={midY}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="text-xs fill-slate-700"
+              className="text-xs fill-slate-700 pointer-events-none"
               style={{ paintOrder: 'stroke', stroke: 'white', strokeWidth: 4 }}
             >
               {edge.weight}
@@ -100,6 +143,7 @@ export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphV
         const isCurrent = visualState.currentNodeId === node.id
         const isStart = node.id === startNodeId
         const isEnd = node.id === endNodeId
+        const isWrongGuess = wrongGuessNodeId === node.id
 
         return (
           <g key={node.id}>
@@ -124,13 +168,25 @@ export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphV
                 strokeDasharray="3 3"
               />
             )}
+            {isWrongGuess && (
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={NODE_RADIUS + ACTIVE_RING_OFFSET + 3}
+                fill="none"
+                className="stroke-rose-500"
+                strokeWidth={ACTIVE_RING_WIDTH}
+                strokeDasharray="2 3"
+              />
+            )}
             <circle
               cx={node.x}
               cy={node.y}
               r={NODE_RADIUS}
               className={`${NODE_FILL[state]} ${NODE_STROKE[state]}`}
               strokeWidth={NODE_STROKE_WIDTH[state]}
-              style={{ filter: NODE_GLOW[state] }}
+              style={{ filter: NODE_GLOW[state], cursor: onNodeClick ? 'pointer' : undefined }}
+              onClick={onNodeClick ? () => onNodeClick(node.id) : undefined}
               data-testid={`race-node-${node.id}`}
             />
             <text
@@ -138,7 +194,7 @@ export function GraphView({ graph, visualState, startNodeId, endNodeId }: GraphV
               y={node.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              className={`text-sm font-medium select-none ${NODE_TEXT[state]}`}
+              className={`text-sm font-medium select-none pointer-events-none ${NODE_TEXT[state]}`}
             >
               {node.label}
             </text>
