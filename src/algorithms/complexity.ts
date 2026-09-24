@@ -1,5 +1,28 @@
 export type AlgorithmId = 'dijkstra' | 'astar' | 'kruskal' | 'prim'
 
+/**
+ * The problem each algorithm solves. Only algorithms in the same family produce
+ * a meaningful head-to-head comparison — Dijkstra vs A* (both shortest-path) is
+ * a fair race, but Dijkstra vs Kruskal (shortest-path vs MST) compares answers
+ * to two different questions and isn't a meaningful comparison.
+ */
+export type AlgorithmFamily = 'shortest-path' | 'mst'
+
+export const ALGORITHM_FAMILY: Record<AlgorithmId, AlgorithmFamily> = {
+  dijkstra: 'shortest-path',
+  astar: 'shortest-path',
+  kruskal: 'mst',
+  prim: 'mst',
+}
+
+export function algorithmsInSameFamily(a: AlgorithmId, b: AlgorithmId): boolean {
+  return ALGORITHM_FAMILY[a] === ALGORITHM_FAMILY[b]
+}
+
+export function algorithmIdsInFamily(family: AlgorithmFamily): AlgorithmId[] {
+  return (Object.keys(ALGORITHM_FAMILY) as AlgorithmId[]).filter((id) => ALGORITHM_FAMILY[id] === family)
+}
+
 export interface ComplexityInfo {
   id: AlgorithmId
   name: string

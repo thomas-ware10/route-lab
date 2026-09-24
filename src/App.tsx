@@ -3,10 +3,11 @@ import { ComparisonPanel } from './components/ComparisonPanel'
 import { ControlPanel } from './components/ControlPanel'
 import { GraphCanvas } from './components/GraphCanvas'
 import { PlaybackControls } from './components/PlaybackControls'
+import { RacePanel } from './components/RacePanel'
 import { StatsPanel } from './components/StatsPanel'
 import { WarningBanner } from './components/WarningBanner'
 
-type Tab = 'editor' | 'compare'
+type Tab = 'editor' | 'race' | 'compare'
 
 function App() {
   const [tab, setTab] = useState<Tab>('editor')
@@ -24,6 +25,7 @@ function App() {
         {(
           [
             ['editor', 'Editor'],
+            ['race', 'Algorithm Race'],
             ['compare', 'Sparse vs. Dense'],
           ] as const
         ).map(([id, label]) => (
@@ -55,6 +57,8 @@ function App() {
               <StatsPanel />
             </div>
           </div>
+        ) : tab === 'race' ? (
+          <RacePanel />
         ) : (
           <ComparisonPanel />
         )}
