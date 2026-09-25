@@ -1,5 +1,7 @@
 # Route Lab
 
+> Vibe coded with [Claude Code](https://claude.com/claude-code).
+
 An interactive visualizer for graph algorithms. You can watch Dijkstra, A\*, Kruskal and Prim solve a problem step by step: on graphs you draw yourself, or on real UK roads between two postcodes.
 
 ## Two modes
